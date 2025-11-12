@@ -1,36 +1,31 @@
 import tkinter as tk
 from tkinter import messagebox as msb
+from tkinter import ttk
 
+import sounddevice as sd
 import queue
 import soundfile as sf
 import threading
-import sounddevice as sd
 
 
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-
         # Create a queue to contain the audio data
         self.q = queue.Queue()
         # Declare variables and initialise them
         self.recording = False
         self.file_exists = False
         self.data = None
-        self.index = 0
+        self.index = -1
 
         self.title("Speech Signal Processing")
-
         # Tạo widget
         self.cvs_figure = tk.Canvas(
             self, width=600, height=300, relief=tk.SUNKEN, border=1
         )
 
-        # Tạo label frame
         lblf_upper = tk.LabelFrame(self)
-        lblf_lower = tk.LabelFrame(self)
-
-        # Tạo button upper
         btn_open = tk.Button(lblf_upper, text="Open", width=8)
         btn_record = tk.Button(
             lblf_upper,
@@ -50,10 +45,13 @@ class App(tk.Tk):
         btn_stop.grid(row=2, padx=5, pady=5)
         btn_play.grid(row=3, padx=5, pady=5)
 
-        # Tạo button lower
-        btn_zoom = tk.Button(
-            lblf_lower, text="Zoom", width=8, command=self.btn_zoom_click
-        )
+        lblf_lower = tk.LabelFrame(self)
+        self.factor_zoom = tk.StringVar()
+        self.cbo_zoom = ttk.Combobox(lblf_lower, width=7, textvariable=self.factor_zoom)
+        self.cbo_zoom.bind("<<ComboboxSelected>>", self.factor_zoom_changed)
+
+        self.cbo_zoom["state"] = "readonly"
+
         btn_next = tk.Button(
             lblf_lower, text="Next", width=8, command=self.btn_next_click
         )
@@ -61,20 +59,19 @@ class App(tk.Tk):
             lblf_lower, text="Prev", width=8, command=self.btn_prev_click
         )
 
-        btn_zoom.grid(row=0, padx=5, pady=5)
+        self.cbo_zoom.grid(row=0, padx=5, pady=5)
         btn_next.grid(row=1, padx=5, pady=5)
         btn_prev.grid(row=2, padx=5, pady=5)
 
-        # Đưa widget lên grid
-        self.cvs_figure.grid(
-            row=0, column=0, rowspan=2, padx=5, pady=5
-        )  # Đưa widget lên lưới
-        lblf_upper.grid(
-            row=0, column=1, padx=5, pady=5, sticky=tk.N
-        )  # Đưa button lên grid
-        lblf_lower.grid(
-            row=1, column=1, padx=5, pady=5, sticky=tk.S
-        )  # Đưa button lên grid
+        # Đưa widget lên lưới
+        self.cvs_figure.grid(row=0, column=0, rowspan=2, padx=5, pady=5)
+        lblf_upper.grid(row=0, column=1, padx=5, pady=6, sticky=tk.N)
+        lblf_lower.grid(row=1, column=1, padx=5, pady=6, sticky=tk.S)
+
+    def factor_zoom_changed(self, event):
+        factor_zoom = self.factor_zoom.get()
+        self.index = -1
+        print(factor_zoom)
 
     # Fit data into queue
     def callback(self, indata, frames, time, status):
@@ -94,15 +91,21 @@ class App(tk.Tk):
             self.data, fs = sf.read("trial.wav", dtype="int16")
             L = len(self.data)
             N = L // 600
-            yc = 150
 
+            lst_values = []
+            for i in range(1, N + 1):
+                s = "%10d" % i
+                lst_values.append(s)
+            self.cbo_zoom["values"] = lst_values
+
+            yc = 150
+            # Xoá canvas
             self.cvs_figure.delete(tk.ALL)
             for x in range(0, 600 - 1):
                 a = self.data[x * N]
                 b = self.data[(x + 1) * N]
-                # Ép kiểu a và b sang int() để tránh lỗi tràn số int16
-                y1 = (((int(a) + 32767) * 300) // 65535) - 150
-                y2 = (((int(b) + 32767) * 300) // 65535) - 150
+                y1 = (int(a) + 32767) * 300 // 65535 - 150
+                y2 = (int(b) + 32767) * 300 // 65535 - 150
                 self.cvs_figure.create_line(x, yc - y1, x + 1, yc - y2, fill="green")
 
         elif x == 3:
@@ -118,9 +121,10 @@ class App(tk.Tk):
 
     # Recording function
     def record_audio(self):
+        # Set to True to record
         self.recording = True
         # Create a file to save the audio
-        msb.showinfo(title="Recording Speak", message="Speak into the mic")
+        msb.showinfo(title="Recording Speech", message="Speak into the mic")
         with sf.SoundFile("trial.wav", mode="w", samplerate=16000, channels=1) as file:
             # Create an input stream to record audio without a preset time
             with sd.InputStream(samplerate=16000, channels=1, callback=self.callback):
@@ -130,49 +134,42 @@ class App(tk.Tk):
                     # write into file
                     file.write(self.q.get())
 
-    def btn_zoom_click(self):
+    def btn_prev_click(self):
+        factor_zoom = self.factor_zoom.get()
+        factor_zoom = int(factor_zoom.strip())
+        data_temp = self.data[::factor_zoom]
+        L = len(data_temp)
+        N = L // 600
         self.cvs_figure.delete(tk.ALL)
         yc = 150
+        if self.index > 0:
+            self.index = self.index - 1
         i = self.index
         for x in range(0, 600 - 1):
-            a = self.data[i * x]
-            b = self.data[i * x + 1]
-            # Ép kiểu a và b sang int() để tránh lỗi tràn số int16
-            y1 = (((int(a) + 32767) * 300) // 65535) - 150
-            y2 = (((int(b) + 32767) * 300) // 65535) - 150
+            a = data_temp[i * 600 + x]
+            b = data_temp[i * 600 + x + 1]
+            y1 = (int(a) + 32767) * 300 // 65535 - 150
+            y2 = (int(b) + 32767) * 300 // 65535 - 150
             self.cvs_figure.create_line(x, yc - y1, x + 1, yc - y2, fill="green")
+        
 
     def btn_next_click(self):
+        factor_zoom = self.factor_zoom.get()
+        factor_zoom = int(factor_zoom.strip())
+        data_temp = self.data[::factor_zoom]
+        L = len(data_temp)
+        N = L // 600
         self.cvs_figure.delete(tk.ALL)
         yc = 150
-        self.index = self.index + 1
+        if self.index < N - 1:
+            self.index = self.index + 1
         i = self.index
         for x in range(0, 600 - 1):
-            a = self.data[i * 600 + x]
-            b = self.data[(i * 600 + x + 1)]
-            # Ép kiểu a và b sang int() để tránh lỗi tràn số int16
-            y1 = (((int(a) + 32767) * 300) // 65535) - 150
-            y2 = (((int(b) + 32767) * 300) // 65535) - 150
+            a = data_temp[i * 600 + x]
+            b = data_temp[i * 600 + x + 1]
+            y1 = (int(a) + 32767) * 300 // 65535 - 150
+            y2 = (int(b) + 32767) * 300 // 65535 - 150
             self.cvs_figure.create_line(x, yc - y1, x + 1, yc - y2, fill="green")
-
-    def btn_prev_click(self):
-        if self.index > 0:  # Kiểm tra không đi quá đầu dữ liệu
-            self.cvs_figure.delete(tk.ALL)
-            self.index -= 1
-            yc = 150
-            i = self.index
-            for x in range(0, 600 - 1):
-                a = self.data[i * 600 + x]
-                b = self.data[i * 600 + x + 1]
-                # Ép kiểu a và b sang int() để tránh lỗi tràn số int16
-                y1 = (((int(a) + 32767) * 300) // 65535) - 150
-                y2 = (((int(b) + 32767) * 300) // 65535) - 150
-                self.cvs_figure.create_line(x, yc - y1, x + 1, yc - y2, fill="green")
-        else:
-            msb.showinfo(
-                title="Start of Data",
-                message="Already at the beginning of the recording",
-            )
 
 
 if __name__ == "__main__":
