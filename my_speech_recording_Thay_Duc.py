@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox as msb
 from tkinter import ttk
+import tkinter.filedialog as fd
 
 import sounddevice as sd
 import queue
@@ -26,7 +27,8 @@ class App(tk.Tk):
         )
 
         lblf_upper = tk.LabelFrame(self)
-        btn_open = tk.Button(lblf_upper, text="Open", width=8)
+        btn_open = tk.Button(lblf_upper, text="Open", width=8, command=self.open_file)
+        btn_cut = tk.Button(lblf_upper, text="Cut", width=8)
         btn_record = tk.Button(
             lblf_upper,
             text="Record",
@@ -41,9 +43,10 @@ class App(tk.Tk):
         )
 
         btn_open.grid(row=0, padx=5, pady=5)
-        btn_record.grid(row=1, padx=5, pady=5)
-        btn_stop.grid(row=2, padx=5, pady=5)
-        btn_play.grid(row=3, padx=5, pady=5)
+        btn_cut.grid(row=1, padx=5, pady=5)
+        btn_record.grid(row=2, padx=5, pady=5)
+        btn_stop.grid(row=3, padx=5, pady=5)
+        btn_play.grid(row=4, padx=5, pady=5)
 
         lblf_lower = tk.LabelFrame(self)
         self.factor_zoom = tk.StringVar()
@@ -72,6 +75,38 @@ class App(tk.Tk):
         factor_zoom = self.factor_zoom.get()
         self.index = -1
         print(factor_zoom)
+
+    def cut_file(self):
+        batdau = 39 * 600 
+        ket_thuc = 50 * 600 + 300
+        date_temp = self.data[batdau:ket_thuc]
+        self.data = date_temp.copy()
+        L = len(self.data)
+        N = L // 600
+        list_values = []
+        for i in range(1, N + 1):
+            s = "%10d" % i
+            list_values.append(s)
+        self.cbo_zoom["values"] = list_values
+
+    def open_file(self):
+        filetypes = ((("Waves files", "*.wav")),)
+        filename = fd.askopenfilename(title="Open wave file", filetypes=filetypes)
+        if filename:
+            print(filename)
+            self.data, fs = sf.read(filename, dtype="int16")
+            L = len(self.data)
+            N = L // 600
+            yc = 150
+
+            self.cvs_figure.delete(tk.ALL)
+            for x in range(0, 600 - 1):
+                a = self.data[x * N]
+                b = self.data[(x + 1) * N]
+                # Ép kiểu a và b sang int() để tránh lỗi tràn số int16
+                y1 = (((int(a) + 32767) * 300) // 65535) - 150
+                y2 = (((int(b) + 32767) * 300) // 65535) - 150
+                self.cvs_figure.create_line(x, yc - y1, x + 1, yc - y2, fill="green")
 
     # Fit data into queue
     def callback(self, indata, frames, time, status):
@@ -151,7 +186,6 @@ class App(tk.Tk):
             y1 = (int(a) + 32767) * 300 // 65535 - 150
             y2 = (int(b) + 32767) * 300 // 65535 - 150
             self.cvs_figure.create_line(x, yc - y1, x + 1, yc - y2, fill="green")
-        
 
     def btn_next_click(self):
         factor_zoom = self.factor_zoom.get()
