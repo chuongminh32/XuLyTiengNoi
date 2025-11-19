@@ -195,7 +195,6 @@ class App(tk.Tk):
         # Xoá canvas
         self.cvs_figure.delete(tk.ALL)
         for x in range(0, 600 - 1):
-            # Convert samples to Python int to avoid int16 overflow during arithmetic
             a = int(self.data[x * N])
             b = int(self.data[(x + 1) * N])
             y1 = (a + 32767) * 600 // 65535 - 300
