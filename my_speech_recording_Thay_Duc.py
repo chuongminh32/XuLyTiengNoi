@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import messagebox as msb
 from tkinter import ttk
 import tkinter.filedialog as fd
-
+import numpy as np
 import sounddevice as sd
 import queue
 import soundfile as sf
@@ -77,17 +77,22 @@ class App(tk.Tk):
         print(factor_zoom)
 
     def cut_file(self):
-        batdau = 39 * 600 
-        ket_thuc = 50 * 600 + 300
-        date_temp = self.data[batdau:ket_thuc]
+        bat_dau = 20 * 600
+        ket_thuc = 32 * 600
+        date_temp = self.data[bat_dau:ket_thuc]
         self.data = date_temp.copy()
         L = len(self.data)
         N = L // 600
+
         list_values = []
         for i in range(1, N + 1):
             s = "%10d" % i
             list_values.append(s)
         self.cbo_zoom["values"] = list_values
+        data_temp = data_temp/32768
+        data_temp = data_temp.astype(np.float32)
+        sd.play(data_temp, 16000)
+        sd.wait()
 
     def open_file(self):
         filetypes = ((("Waves files", "*.wav")),)
@@ -97,6 +102,14 @@ class App(tk.Tk):
             self.data, fs = sf.read(filename, dtype="int16")
             L = len(self.data)
             N = L // 600
+            vi_tri_max = np.argmax(self.data)
+            max = self.data[vi_tri_max]
+            lst_values = []
+            for i in range(1, N + 1):
+                s = "%10d" % i
+                lst_values.append(s)
+
+            self.cbo_zoom["values"] = lst_values
             yc = 150
 
             self.cvs_figure.delete(tk.ALL)
@@ -107,6 +120,12 @@ class App(tk.Tk):
                 y1 = (((int(a) + 32767) * 300) // 65535) - 150
                 y2 = (((int(b) + 32767) * 300) // 65535) - 150
                 self.cvs_figure.create_line(x, yc - y1, x + 1, yc - y2, fill="green")
+
+            data = self.data.copy()
+            data = data/32768
+            data = data.astype(np.float32)
+            sd.play(data, fs)
+            sd.wait()
 
     # Fit data into queue
     def callback(self, indata, frames, time, status):
